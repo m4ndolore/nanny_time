@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nanny Payroll Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .pay-stub {
+            margin-top: 30px;
+            padding: 20px;
+            border: 2px solid #333;
+            background-color: #f9f9f9;
+        }
+        .pay-stub h3 {
+            margin-top: 0;
+            text-align: center;
+        }
+        .stub-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .stub-section {
+            margin: 15px 0;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+        }
+        #history {
+            margin-top: 30px;
+        }
+        .history-entry {
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Nanny Payroll Tracker</h1>
+        
+        <div class="form-group">
+            <label for="nannyName">Nanny Name:</label>
+            <input type="text" id="nannyName" placeholder="Enter nanny's name">
+        </div>
+        
+        <div class="form-group">
+            <label for="hourlyRate">Hourly Rate ($):</label>
+            <input type="number" id="hourlyRate" step="0.01" placeholder="15.00">
+        </div>
+        
+        <h2>Log Hours</h2>
+        <div class="form-group">
+            <label for="workDate">Date:</label>
+            <input type="date" id="workDate">
+        </div>
+        
+        <div class="form-group">
+            <label for="startTime">Start Time:</label>
+            <input type="time" id="startTime">
+        </div>
+        
+        <div class="form-group">
+            <label for="endTime">End Time:</label>
+            <input type="time" id="endTime">
+        </div>
+        
+        <button onclick="addHours()">Add Hours</button>
+        <button onclick="generatePayStub()">Generate Weekly Pay Stub</button>
+        <button onclick="clearWeek()">Clear Week</button>
+        
+        <div id="weeklyHours" style="margin-top: 20px;">
+            <h3>This Week's Hours</h3>
+            <div id="hoursLog"></div>
+            <p><strong>Total Hours: <span id="totalHours">0</span></strong></p>
+        </div>
+        
+        <div id="payStubSection" class="hidden">
+            <div class="pay-stub" id="payStub">
+                <!-- Pay stub will be generated here -->
+            </div>
+            <button onclick="printPayStub()">Print Pay Stub</button>
+        </div>
+        
+        <div id="history">
+            <h3>Pay History</h3>
+            <div id="payHistory"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize data
+        let currentWeekHours = [];
+        let payHistory = JSON.parse(localStorage.getItem('nannyPayHistory')) || [];
+        
+        // Set default date to today
+        document.getElementById('workDate').valueAsDate = new Date();
+        
+        // Load saved data
+        document.getElementById('nannyName').value = localStorage.getItem('nannyName') || '';
+        document.getElementById('hourlyRate').value = localStorage.getItem('hourlyRate') || '';
+        
+        // Save data on change
+        document.getElementById('nannyName').addEventListener('change', function() {
+            localStorage.setItem('nannyName', this.value);
+        });
+        
+        document.getElementById('hourlyRate').addEventListener('change', function() {
+            localStorage.setItem('hourlyRate', this.value);
+        });
+        
+        function addHours() {
+            const date = document.getElementById('workDate').value;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            
+            if (!date || !startTime || !endTime) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            // Calculate hours worked
+            const start = new Date(`${date} ${startTime}`);
+            const end = new Date(`${date} ${endTime}`);
+            const hoursWorked = (end - start) / (1000 * 60 * 60);
+            
+            if (hoursWorked <= 0) {
+                alert('End time must be after start time');
+                return;
+            }
+            
+            currentWeekHours.push({
+                date: date,
+                startTime: startTime,
+                endTime: endTime,
+                hours: hoursWorked
+            });
+            
+            updateHoursDisplay();
+            
+            // Clear time inputs
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+        }
+        
+        function updateHoursDisplay() {
+            const hoursLog = document.getElementById('hoursLog');
+            const totalHoursSpan = document.getElementById('totalHours');
+            
+            hoursLog.innerHTML = '';
+            let totalHours = 0;
+            
+            currentWeekHours.forEach((entry, index) => {
+                const div = document.createElement('div');
+                div.innerHTML = `${new Date(entry.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}: ${entry.startTime} - ${entry.endTime} (${entry.hours.toFixed(2)} hours)`;
+                hoursLog.appendChild(div);
+                totalHours += entry.hours;
+            });
+            
+            totalHoursSpan.textContent = totalHours.toFixed(2);
+        }
+        
+        function generatePayStub() {
+            const nannyName = document.getElementById('nannyName').value;
+            const hourlyRate = parseFloat(document.getElementById('hourlyRate').value);
+            
+            if (!nannyName || !hourlyRate || currentWeekHours.length === 0) {
+                alert('Please enter nanny name, hourly rate, and log some hours');
+                return;
+            }
+            
+            const totalHours = currentWeekHours.reduce((sum, entry) => sum + entry.hours, 0);
+            const grossPay = totalHours * hourlyRate;
+            
+            // Calculate taxes (simplified - adjust based on actual rates)
+            const federalTax = grossPay * 0.12; // 12% federal
+            const stateTax = grossPay * 0.06; // 6% Hawaii state
+            const socialSecurity = grossPay * 0.062; // 6.2% SS
+            const medicare = grossPay * 0.0145; // 1.45% Medicare
+            
+            const totalDeductions = federalTax + stateTax + socialSecurity + medicare;
+            const netPay = grossPay - totalDeductions;
+            
+            // Get week ending date
+            const weekEnding = new Date(Math.max(...currentWeekHours.map(e => new Date(e.date))));
+            
+            // Generate pay stub HTML
+            const payStubHTML = `
+                <h3>PAY STUB</h3>
+                <div class="stub-row">
+                    <span>Employee:</span>
+                    <span>${nannyName}</span>
+                </div>
+                <div class="stub-row">
+                    <span>Pay Period:</span>
+                    <span>Week ending ${weekEnding.toLocaleDateString()}</span>
+                </div>
+                <div class="stub-row">
+                    <span>Pay Date:</span>
+                    <span>${new Date().toLocaleDateString()}</span>
+                </div>
+                
+                <div class="stub-section">
+                    <strong>EARNINGS</strong>
+                    <div class="stub-row">
+                        <span>Regular Hours:</span>
+                        <span>${totalHours.toFixed(2)}</span>
+                    </div>
+                    <div class="stub-row">
+                        <span>Rate:</span>
+                        <span>$${hourlyRate.toFixed(2)}/hr</span>
+                    </div>
+                    <div class="stub-row">
+                        <span><strong>Gross Pay:</strong></span>
+                        <span><strong>$${grossPay.toFixed(2)}</strong></span>
+                    </div>
+                </div>
+                
+                <div class="stub-section">
+                    <strong>DEDUCTIONS</strong>
+                    <div class="stub-row">
+                        <span>Federal Tax:</span>
+                        <span>$${federalTax.toFixed(2)}</span>
+                    </div>
+                    <div class="stub-row">
+                        <span>State Tax (HI):</span>
+                        <span>$${stateTax.toFixed(2)}</span>
+                    </div>
+                    <div class="stub-row">
+                        <span>Social Security:</span>
+                        <span>$${socialSecurity.toFixed(2)}</span>
+                    </div>
+                    <div class="stub-row">
+                        <span>Medicare:</span>
+                        <span>$${medicare.toFixed(2)}</span>
+                    </div>
+                    <div class="stub-row">
+                        <span><strong>Total Deductions:</strong></span>
+                        <span><strong>$${totalDeductions.toFixed(2)}</strong></span>
+                    </div>
+                </div>
+                
+                <div class="stub-section">
+                    <div class="stub-row" style="font-size: 1.2em;">
+                        <span><strong>NET PAY:</strong></span>
+                        <span><strong>$${netPay.toFixed(2)}</strong></span>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('payStub').innerHTML = payStubHTML;
+            document.getElementById('payStubSection').classList.remove('hidden');
+            
+            // Save to history
+            const payRecord = {
+                date: new Date().toISOString(),
+                weekEnding: weekEnding.toISOString(),
+                nannyName: nannyName,
+                totalHours: totalHours,
+                grossPay: grossPay,
+                netPay: netPay,
+                details: currentWeekHours
+            };
+            
+            payHistory.unshift(payRecord);
+            localStorage.setItem('nannyPayHistory', JSON.stringify(payHistory));
+            updatePayHistory();
+        }
+        
+        function updatePayHistory() {
+            const historyDiv = document.getElementById('payHistory');
+            historyDiv.innerHTML = '';
+            
+            payHistory.slice(0, 10).forEach(record => {
+                const div = document.createElement('div');
+                div.className = 'history-entry';
+                div.innerHTML = `
+                    <strong>${new Date(record.weekEnding).toLocaleDateString()}</strong> - 
+                    ${record.totalHours.toFixed(2)} hours - 
+                    Gross: $${record.grossPay.toFixed(2)} - 
+                    Net: $${record.netPay.toFixed(2)}
+                `;
+                historyDiv.appendChild(div);
+            });
+        }
+        
+        function clearWeek() {
+            if (confirm('Clear all hours for this week?')) {
+                currentWeekHours = [];
+                updateHoursDisplay();
+                document.getElementById('payStubSection').classList.add('hidden');
+            }
+        }
+        
+        function printPayStub() {
+            window.print();
+        }
+        
+        // Load history on page load
+        updatePayHistory();
+    </script>
+</body>
+</html>
